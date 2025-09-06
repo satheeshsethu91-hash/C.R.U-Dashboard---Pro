@@ -1,17 +1,8 @@
-# Streamlit framework
-streamlit==1.35.0  
-
-# Data handling
-pandas==2.2.2  
-openpyxl==3.1.2  
-
-# Visualization
-plotly==5.22.0  
-matplotlib==3.9.0  
-
-# AI + OpenRouter API
-requests==2.32.3  
-python-dotenv==1.0.1  
-
-# Optional: faster CSV/Excel handling
-xlrd==2.0.1  
+streamlit==1.35.0
+pandas==2.2.2
+openpyxl==3.1.2
+plotly==5.22.0
+matplotlib==3.9.0
+requests==2.32.3
+python-dotenv==1.0.1
+xlrd==2.0.1
