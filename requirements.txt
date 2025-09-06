@@ -1,7 +1,5 @@
 streamlit
 pandas
-openpyxl
-plotly
-pandasai
 matplotlib
-pillow
+python-dotenv
+openai
