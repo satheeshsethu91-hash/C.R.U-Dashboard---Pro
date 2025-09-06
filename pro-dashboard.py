@@ -1,8 +1,18 @@
+# ---------------- AUTO-INSTALL MISSING PACKAGE ----------------
+import subprocess
+import sys
+
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-dotenv"])
+    from dotenv import load_dotenv
+
+# ---------------- STANDARD IMPORTS ----------------
 import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
-from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 import openai
 
