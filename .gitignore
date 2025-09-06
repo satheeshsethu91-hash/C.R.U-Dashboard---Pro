@@ -1,0 +1,24 @@
+# Ignore environment variables
+.env
+
+# Ignore Streamlit secrets (if you use them)
+.streamlit/secrets.toml
+
+# Ignore uploaded data
+uploaded_excels/
+*.xlsx
+*.csv
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore virtual environments
+.venv/
+env/
+venv/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
