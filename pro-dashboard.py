@@ -1,115 +1,170 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import os
+from datetime import datetime
 from dotenv import load_dotenv
-from openai import OpenAI
+import matplotlib.pyplot as plt
+import openai
 
-# Load environment variables
+# ---------------- CONFIG ----------------
+st.set_page_config(page_title="MERIT Pro Dashboard", layout="wide")
+
+UPLOAD_DIR = "uploaded_excels"
+SAMPLE_FILE = "sample_data.xlsx"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Load environment variables (API key from .env)
 load_dotenv()
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+openai.api_key = os.getenv("OPENROUTER_API_KEY")
+openai.api_base = "https://openrouter.ai/api/v1"
 
-# Configure OpenRouter client
-client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=OPENROUTER_API_KEY)
+# ---------------- HEADER ----------------
+col1, col2 = st.columns([1, 5])
+with col1:
+    if os.path.exists("merit_logo.png"):
+        st.image("merit_logo.png", width=140)
+with col2:
+    st.title("MERIT Pro Dashboard")
 
-# Streamlit config
-st.set_page_config(
-    page_title="MERIT Pro Dashboard",
-    page_icon="📊",
-    layout="wide"
-)
+# ---------------- ROLE SELECTION ----------------
+st.sidebar.title("🔑 Role Selection")
+role = st.sidebar.radio("Select Role", ["Client", "Admin"])
 
-# ---- Custom Theme & Logo ----
-st.markdown(
-    """
-    <style>
-        [data-testid="stSidebar"] {
-            background-color: #0F1E3C;
-        }
-        .stApp {
-            background-color: #F7F9FB;
-        }
-        h1, h2, h3, h4, h5 {
-            color: #0096fa;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-st.image("merit_logo.png", width=180)
-
-# ---- Role Selection ----
-role = st.sidebar.radio("Select Role", ["Admin", "Client"])
-
-# ---- Data Storage ----
-if "uploaded_file" not in st.session_state:
-    st.session_state.uploaded_file = None
-if "df" not in st.session_state:
-    st.session_state.df = None
-
-# ---- Admin Section ----
+# ---------------- ADMIN MODE ----------------
 if role == "Admin":
-    st.title("📂 Admin Panel")
-    uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx", "xls", "csv"])
+    st.header("📂 Admin Dashboard")
 
+    # Simple password gate
+    password = st.sidebar.text_input("Enter Admin Password", type="password")
+    if password != "admin123":
+        st.warning("Please enter the correct Admin password to continue.")
+        st.stop()
+
+    # File uploader
+    uploaded_file = st.file_uploader("Upload Excel/CSV File", type=["xlsx", "csv"])
     if uploaded_file:
-        st.session_state.uploaded_file = uploaded_file
-        if uploaded_file.name.endswith(".csv"):
-            st.session_state.df = pd.read_csv(uploaded_file)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{timestamp}_{uploaded_file.name}"
+        file_path = os.path.join(UPLOAD_DIR, filename)
+
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+
+        st.success(f"✅ File saved as {filename}")
+
+    # Clear uploads option
+    if st.button("🗑️ Clear Upload History"):
+        for f in os.listdir(UPLOAD_DIR):
+            os.remove(os.path.join(UPLOAD_DIR, f))
+        st.success("Upload history cleared!")
+
+    # List available files
+    excel_files = [f for f in os.listdir(UPLOAD_DIR) if f.endswith((".xlsx", ".csv"))]
+    excel_files.sort(reverse=True)
+
+    if not excel_files and os.path.exists(SAMPLE_FILE):
+        excel_files = [SAMPLE_FILE]
+
+    if excel_files:
+        selected_file = st.selectbox("📂 Select a file to preview", excel_files)
+        file_path = os.path.join(UPLOAD_DIR, selected_file) if selected_file != SAMPLE_FILE else SAMPLE_FILE
+
+        # Load file
+        if selected_file.endswith(".csv"):
+            df = pd.read_csv(file_path)
         else:
-            st.session_state.df = pd.read_excel(uploaded_file)
-        st.success("✅ File uploaded successfully!")
+            xls = pd.ExcelFile(file_path)
+            sheet = st.sidebar.radio("📑 Choose a sheet", xls.sheet_names)
+            df = pd.read_excel(xls, sheet_name=sheet, header=0)
 
-        # Preview
-        st.subheader("Data Preview")
-        st.dataframe(st.session_state.df.head())
-
-    if st.button("Clear Uploaded Data"):
-        st.session_state.uploaded_file = None
-        st.session_state.df = None
-        st.warning("History cleared!")
-
-# ---- Client Section ----
-if role == "Client":
-    st.title("📊 Client Dashboard")
-
-    if st.session_state.df is not None:
-        df = st.session_state.df
-
-        # Show data
-        st.subheader("Data Table")
-        st.dataframe(df)
-
-        # Search & Filters
-        st.subheader("🔎 Search & Filter")
-        col = st.selectbox("Select Column", df.columns)
-        search_val = st.text_input("Enter value to search")
-        if search_val:
-            filtered = df[df[col].astype(str).str.contains(search_val, case=False, na=False)]
-            st.dataframe(filtered)
-
-        # Charts
-        st.subheader("📈 Charts")
-        chart_col = st.selectbox("Select Column for Chart", df.columns)
-        if df[chart_col].dtype in ["int64", "float64"]:
-            st.bar_chart(df[chart_col])
-        else:
-            st.bar_chart(df[chart_col].value_counts())
-
-        # AI Insights
-        st.subheader("🤖 AI Insights")
-        question = st.text_area("Ask a question about your data")
-        if st.button("Get Answer") and question:
-            # Send query to OpenRouter
-            response = client.chat.completions.create(
-                model="meta-llama/llama-3.1-8b-instruct",
-                messages=[
-                    {"role": "system", "content": "You are a data assistant. Answer questions based on the provided dataset."},
-                    {"role": "user", "content": f"Here is the dataset:\n{df.head(20).to_string()}\n\nQuestion: {question}"}
-                ]
-            )
-            st.markdown(f"**Answer:** {response.choices[0].message['content']}")
+        st.subheader("📋 Data Preview")
+        st.dataframe(df.head(50), use_container_width=True)
 
     else:
-        st.warning("⚠️ No data available. Please ask Admin to upload a file.")
+        st.info("📂 No files uploaded yet. A sample file will be used for Clients.")
+
+# ---------------- CLIENT MODE ----------------
+else:
+    st.header("📊 Client Dashboard")
+
+    excel_files = [f for f in os.listdir(UPLOAD_DIR) if f.endswith((".xlsx", ".csv"))]
+    excel_files.sort(reverse=True)
+
+    if not excel_files and os.path.exists(SAMPLE_FILE):
+        excel_files = [SAMPLE_FILE]
+
+    if not excel_files:
+        st.warning("⚠️ No data available. Please ask Admin to upload.")
+        st.stop()
+
+    selected_file = st.selectbox("📂 Select a file", excel_files)
+    file_path = os.path.join(UPLOAD_DIR, selected_file) if selected_file != SAMPLE_FILE else SAMPLE_FILE
+
+    # Load file
+    if selected_file.endswith(".csv"):
+        df = pd.read_csv(file_path)
+    else:
+        xls = pd.ExcelFile(file_path)
+        sheet = st.sidebar.radio("📑 Choose a sheet", xls.sheet_names)
+        df = pd.read_excel(xls, sheet_name=sheet, header=0)
+
+    st.subheader(f"📋 Data Preview: {selected_file}")
+
+    # Search
+    search_term = st.text_input("🔍 Search")
+    if search_term:
+        mask = df.apply(lambda row: row.astype(str).str.contains(search_term, case=False, na=False).any(), axis=1)
+        df = df[mask]
+
+    # Filters
+    with st.expander("⚙️ Column Filters"):
+        for col in df.columns:
+            unique_vals = df[col].dropna().unique().tolist()
+            if len(unique_vals) < 50:
+                selected_vals = st.multiselect(f"Filter {col}", unique_vals)
+                if selected_vals:
+                    df = df[df[col].isin(selected_vals)]
+
+    st.dataframe(df, use_container_width=True)
+
+    # Charts
+    with st.expander("📊 Charts & Insights"):
+        chart_type = st.selectbox("Select chart type", ["Bar", "Line", "Pie"])
+        numeric_cols = df.select_dtypes(include="number").columns.tolist()
+        non_numeric_cols = df.select_dtypes(exclude="number").columns.tolist()
+
+        if chart_type and numeric_cols and non_numeric_cols:
+            x_axis = st.selectbox("X-axis", non_numeric_cols)
+            y_axis = st.selectbox("Y-axis", numeric_cols)
+
+            if chart_type == "Bar":
+                fig, ax = plt.subplots()
+                df.groupby(x_axis)[y_axis].sum().plot(kind="bar", ax=ax)
+                st.pyplot(fig)
+
+            elif chart_type == "Line":
+                fig, ax = plt.subplots()
+                df.groupby(x_axis)[y_axis].sum().plot(kind="line", marker="o", ax=ax)
+                st.pyplot(fig)
+
+            elif chart_type == "Pie":
+                fig, ax = plt.subplots()
+                df.groupby(x_axis)[y_axis].sum().plot(kind="pie", autopct="%1.1f%%", ax=ax)
+                st.pyplot(fig)
+
+    # AI Q&A
+    with st.expander("🤖 Ask AI about this data"):
+        question = st.text_input("Ask a question about the dataset")
+        if question and not df.empty:
+            try:
+                response = openai.ChatCompletion.create(
+                    model="mistralai/mistral-7b-instruct:free",
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant that analyzes tabular data."},
+                        {"role": "user", "content": f"Here is the dataset:\n{df.head(50).to_csv(index=False)}"},
+                        {"role": "user", "content": question},
+                    ],
+                )
+                st.success(response["choices"][0]["message"]["content"])
+            except Exception as e:
+                st.error(f"AI request failed: {e}")
