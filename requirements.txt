@@ -6,3 +6,4 @@ matplotlib==3.9.0
 requests==2.32.3
 python-dotenv==1.0.1
 xlrd==2.0.1
+openai==1.40.0
